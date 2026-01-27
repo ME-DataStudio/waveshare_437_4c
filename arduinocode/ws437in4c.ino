@@ -18,18 +18,9 @@
 // Include SPIFFS
 #define FS_NO_GLOBALS
 #include <FS.h>
-
-// Include WiFi and http client
-#ifdef ARDUINO_ARCH_ESP8266
-  #include <ESP8266WiFi.h>
-  #include <ESP8266HTTPClient.h>
-  #include <ESP8266WiFiMulti.h>
-  #include <WiFiClientSecureBearSSL.h>
-#else
-  #include "SPIFFS.h" // Required for ESP32 only
-  #include <WiFi.h>
-  #include <HTTPClient.h>
-#endif
+#include "SPIFFS.h" // Required for ESP32 only
+#include <WiFi.h>
+#include <HTTPClient.h>
 
 // Load tabs attached to this sketch
 #include "List_SPIFFS.h"
@@ -90,7 +81,7 @@ void setup()
   Serial.println();
 
   // This is for demoe purposes only so that file is fetched each time this is run
-  if (SPIFFS.exists("/M81.jpg") == true) {
+  if (SPIFFS.exists("/image.jpg") == true) {
     Serial.println("For test only, removing file");
     SPIFFS.remove("/M81.jpg");
     //SPIFFS.remove("/F35.jpg");
@@ -106,7 +97,7 @@ void loop()
   uint32_t t = millis();
 
   // Fetch the jpg file from the specified URL, examples only, from imgur
-  bool loaded_ok = getFile("https://i.imgur.com/C77RWcq.jpg", "/M81.jpg"); // Note name preceded with "/"
+  bool loaded_ok = getFile("https://i.imgur.com/C77RWcq.jpg", "/image.jpg"); // Note name preceded with "/"
   //bool loaded_ok = getFile("https://i.imgur.com/OnW2qOO.jpg", "/F35.jpg");
 
   t = millis() - t;
@@ -118,7 +109,7 @@ void loop()
   t = millis();
 
   // Now draw the SPIFFS file
-  TJpgDec.drawFsJpg(0, 0, "/M81.jpg");
+  TJpgDec.drawFsJpg(0, 0, "/image.jpg");
   //TJpgDec.drawFsJpg(0, 0, "/F35.jpg");
 
   t = millis() - t;
