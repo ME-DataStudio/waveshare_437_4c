@@ -1,0 +1,141 @@
+esphome:
+  name: epaper-dashboard
+
+esp32:
+  variant: esp32s3
+  flash_size: 16MB # FeatherS3[D] has a 16MB flash
+
+psram:
+  mode: quad
+  speed: 80MHz
+
+logger:
+  level: VERBOSE
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+spi:
+  clk_pin: GPIO12
+  mosi_pin: GPIO11
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 18
+
+  - file: "gfonts://Roboto"
+    id: font_medium
+    size: 28
+
+  - file: "gfonts://Roboto"
+    id: font_large
+    size: 64
+
+sensor:
+  - platform: homeassistant
+    id: living_temp
+    entity_id: sensor.snzb_02d_temperatuur #sensor.woonkamer_temperatuur
+
+  - platform: homeassistant
+    id: living_humidity
+    entity_id: sensor.snzb_02d_luchtvochtigheid_2 #sensor.woonkamer_vochtigheid
+
+text_sensor:
+  - platform: homeassistant
+    id: weather_state
+    entity_id: weather.home
+
+display:
+  - platform: epaper_spi
+    model: Spectra-E6
+
+    dimensions:
+      width: 512
+      height: 368
+
+    cs_pin: GPIO10
+    dc_pin: GPIO6
+    reset_pin: GPIO7
+
+    busy_pin:
+      number: GPIO17
+      inverted: true
+
+    update_interval: 15min
+    full_update_every: 1
+
+    lambda: |-
+      Color BLACK(0,0,0);
+      Color WHITE(255,255,255);
+      Color RED(255,0,0);
+      Color YELLOW(0,255,255);
+
+    
+
+      it.fill(WHITE);
+
+      // Header
+      it.strftime(
+        15, 10,
+        id(font_medium),
+        RED,
+        "%d-%m-%Y %H:%M",
+        id(ha_time).now()
+      );
+
+      it.line(0,45,512,45);
+
+      // Temperatuur
+      it.printf(
+        20, 70,
+        id(font_large),
+        BLACK,
+        "%.1f°C",
+        id(living_temp).state
+      );
+
+      // Vochtigheid
+      it.printf(
+        25, 145,
+        id(font_medium),
+        BLACK,
+        "%.0f%% RV",
+        id(living_humidity).state
+      );
+
+      // Weerstatus
+      it.printf(
+        20, 200,
+        id(font_medium),
+        BLACK,
+        "%s",
+        id(weather_state).state.c_str()
+      );
+
+      it.line(0,250,512,250);
+
+      // Weersverwachting placeholder
+      it.print(
+        15,270,
+        id(font_small),
+        BLACK,
+        "5-daagse weersverwachting"
+      );
+
+      // Dag 1
+      it.print(20,300,id(font_small),BLACK,"Ma");
+      it.print(110,300,id(font_small),BLACK,"Di");
+      it.print(200,300,id(font_small),BLACK,"Wo");
+      it.print(290,300,id(font_small),BLACK,"Do");
+      it.print(380,300,id(font_small),BLACK,"Vr");
