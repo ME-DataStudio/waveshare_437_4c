@@ -1,7 +1,18 @@
-#include <GxEPD2.h>
-#include <GxEPD2_4C.h>
-#include <GxEPD2_EPD.h>
+#include <secrets.h>
+#include <Adafruit_GFX.h> 
+#include <fonts/GothamRoundedBook.h>
+#include <fonts/GothamRoundedBold.h>
+#include <fonts/GothamRoundedBoldBig.h>
+#include <glyphs/weather.h>
+#include <glyphs/icons.h>
+#include <glyphs/weather_small.h>
+#include <GxEPD2_4C.h>  
+#include <WiFi.h>  
+#include <HTTPClient.h>  
+#include <ArduinoJson.h>  
 #include <Fonts/FreeMonoBold9pt7b.h>
+#include <ArduinoJson.h>
+#include <map>
 
 // epaper Definitions
 #define BUSY 17
@@ -13,8 +24,94 @@
 //#define BUTTON_PIN 2  // New: Button for display inversion
 //#define EPD_WIDTH 512
 //#define EPD_HEIGHT 368
+// set borders of display inside frame
+#define OFFSET_LEFT 10
+#define OFFSET_TOP 10
+#define OFFSET_RIGHT 10
+#define OFFSET_BOTTOM 20
 
 GxEPD2_4C < GxEPD2_437c, GxEPD2_437c::HEIGHT> epd(GxEPD2_437c(/*CS=D8*/ CS, /*DC=D3*/ DC, /*RST=D4*/ RST, /*BUSY=D2*/ BUSY)); // Waveshare 4.37" 4-color
+
+const char *http_endpoint = "http://homeassistant.local:8123/api/states/sensor.epaper_esp32s3_data";
+
+const char *title = "WEER";
+const size_t GLYPH_SIZE_WEATHER = 100;
+const size_t GLYPH_SIZE_WEATHER_SMALL = 45;
+
+typedef const unsigned char *weather_icon;
+std::map<std::string, weather_icon> weather_icon_map{
+    {"clear-night", weather_clear_night},
+    {"cloudy", weather_cloudy},
+    {"fog", weather_foggy},
+    {"hail", weather_thunderstorm},
+    {"lightning", weather_thunderstorm},
+    {"lightning-rainy", weather_thunderstorm},
+    {"partlycloudy", weather_partly_cloudy},
+    {"night-partly-cloudy", weather_partly_cloudy_night},
+    {"pouring", weather_rainy},
+    {"rainy", weather_rainy},
+    {"snowy", weather_snowing},
+    {"snowy-rainy", weather_snowing},
+    {"sunny", weather_sunny},
+    {"windy", weather_wind},
+    {"windy-variant", weather_wind}};
+
+typedef const unsigned char *weather_icon;
+std::map<std::string, weather_icon> weather_icon_map_small{
+    {"clear-night", weather_small_clear_night},
+    {"cloudy", weather_small_cloudy},
+    {"fog", weather_small_foggy},
+    {"hail", weather_small_thunderstorm},
+    {"lightning", weather_small_thunderstorm},
+    {"lightning-rainy", weather_small_thunderstorm},
+    {"partlycloudy", weather_small_partly_cloudy},
+    {"night-partly-cloudy", weather_small_partly_cloudy_night},
+    {"pouring", weather_small_rainy},
+    {"rainy", weather_small_rainy},
+    {"snowy", weather_small_snowing},
+    {"snowy-rainy", weather_small_snowing},
+    {"sunny", weather_small_sunny},
+    {"windy", weather_small_wind},
+    {"windy-variant", weather_small_wind}};
+
+// RTC memory
+typedef struct
+{
+  int counter;
+} RTCData;
+
+typedef struct
+{
+  float temperature_inside;
+  float humidity_inside;
+  float temperature_outside;
+  float humidity_outside;
+  float wind_speed;
+  String weather_forecast_now;
+  String weather_forecast_2h;
+  float weather_forecast_2h_temp;
+  String weather_forecast_2h_time;
+  String weather_forecast_4h;
+  float weather_forecast_4h_temp;
+  String weather_forecast_4h_time;
+  String weather_forecast_6h;
+  float weather_forecast_6h_temp;
+  String weather_forecast_6h_time;
+  String weather_forecast_8h;
+  float weather_forecast_8h_temp;
+  String weather_forecast_8h_time;
+  String time;
+  String timestamp;
+} HAData;
+
+//RTCMemory<RTCData> rtcMemory;
+HAData haData;
+
+size_t ctr = 0;
+
+//void writeDisplay();
+//bool loadRTCData();
+//String httpGETRequest(const char *);
 
 
 void epdInit() {
@@ -26,33 +123,258 @@ void epdInit() {
   Serial.println("E-paper initialized");
 }
 
+//bool loadRTCData()
+//{
+  /*
+  if (rtcMemory.begin())
+  {
+    RTCData *data = rtcMemory.getData();
+    ctr = ++data->counter;
+    rtcMemory.save();
+    return true;
+  }
+  else
+  {
+    RTCData *data = rtcMemory.getData();
+    data->counter = 0;
+    ctr = 0;
+    rtcMemory.save();
+    return false;
+  }
+  */
+//}
+
+const unsigned char *get_weather_icon(String forecast, bool small = false)
+{
+  if (small)
+  {
+    if (weather_icon_map_small.find(forecast.c_str()) != weather_icon_map_small.end())
+    {
+      return weather_icon_map_small[forecast.c_str()];
+    }
+    else
+    {
+      return weather_small_sunny;
+    }
+  }
+  else
+  {
+    if (weather_icon_map.find(forecast.c_str()) != weather_icon_map.end())
+    {
+      return weather_icon_map[forecast.c_str()];
+    }
+    else
+    {
+      return weather_sunny;
+    }
+  }
+}
+
+void printForecast(int offset_x, int offset_y, weather_icon icon, float temperature, String time)
+{
+  epd.setFont(&GothamRounded_Book14pt8b);
+  epd.setCursor(OFFSET_LEFT + offset_x, OFFSET_TOP + offset_y);
+  epd.print(time);
+
+  epd.drawBitmap(OFFSET_LEFT + offset_x - 13, OFFSET_TOP + offset_y + 8, icon, GLYPH_SIZE_WEATHER_SMALL, GLYPH_SIZE_WEATHER_SMALL, GxEPD_BLACK);
+
+  if (temperature > 9.99)
+  {
+    //epd.setCursor(OFFSET_LEFT + offset_x + 10, OFFSET_TOP + offset_y + 10 + GLYPH_SIZE_WEATHER_SMALL + 28);
+    epd.setCursor(OFFSET_LEFT + offset_x + 30, OFFSET_TOP + offset_y + 40);
+  }
+  else
+  {
+    epd.setCursor(OFFSET_LEFT + offset_x + 27, OFFSET_TOP + offset_y + 40);
+  }
+  epd.setFont(&GothamRounded_Book14pt8b);
+  epd.printf("%.0f°C", temperature);
+}
+
+void writeDisplay()
+{
+  epd.setRotation(0);
+
+  epd.setTextColor(GxEPD_BLACK);
+  int16_t tbx, tby;
+  uint16_t tbw, tbh;
+  epd.setFont(&GothamRounded_Bold32pt7b); // title
+  epd.getTextBounds(title, 0, 0, &tbx, &tby, &tbw, &tbh);
+
+  epd.firstPage();
+  do
+  {
+    // print Title
+    epd.setCursor(((epd.width() - tbw) / 2) - tbx - 100 , OFFSET_TOP + 60);
+    epd.print(title);
+    // time
+    epd.setFont(&GothamRounded_Book14pt8b);
+    epd.getTextBounds("Tijd 11:11", 0, 0, &tbx, &tby, &tbw, &tbh);
+    epd.setCursor(((epd.width() - tbw) / 2) - tbx + 150, OFFSET_TOP + 20);
+    epd.printf("Tijd %s", haData.time.c_str());
+
+    // print temperature and humidity ///////////////////
+    epd.setFont(&GothamRounded_Bold14pt8b);
+    size_t weatherdetails_offset = 100;
+    weather_icon weather_icon = get_weather_icon(haData.weather_forecast_now,true);
+    epd.drawBitmap(OFFSET_LEFT + 50 , OFFSET_TOP + weatherdetails_offset - GLYPH_SIZE_WEATHER_SMALL / 2, weather_icon, GLYPH_SIZE_WEATHER_SMALL, GLYPH_SIZE_WEATHER_SMALL, GxEPD_BLACK);
+    epd.setCursor(OFFSET_LEFT + 110, OFFSET_TOP + weatherdetails_offset + GLYPH_SIZE_WEATHER_SMALL / 4);
+    epd.printf("%.1f°C", haData.temperature_outside);
+
+    epd.drawBitmap(OFFSET_LEFT + 250, OFFSET_TOP + weatherdetails_offset - GLYPH_SIZE_WEATHER_SMALL / 2, icon_humidity, GLYPH_SIZE_WEATHER_SMALL, GLYPH_SIZE_WEATHER_SMALL, GxEPD_BLACK);
+    epd.setCursor(OFFSET_LEFT + 310, OFFSET_TOP + weatherdetails_offset + GLYPH_SIZE_WEATHER_SMALL / 4);
+    epd.printf("%.1f%%", haData.humidity_outside);
+
+    // print wind ////////////////////
+    epd.setFont(&GothamRounded_Bold14pt8b);
+    weatherdetails_offset = 150;
+    epd.drawBitmap(OFFSET_LEFT + 50, OFFSET_TOP + weatherdetails_offset - GLYPH_SIZE_WEATHER_SMALL / 2, weather_small_wind, GLYPH_SIZE_WEATHER_SMALL, GLYPH_SIZE_WEATHER_SMALL, GxEPD_BLACK);
+    epd.setCursor(OFFSET_LEFT + 110, OFFSET_TOP + weatherdetails_offset + GLYPH_SIZE_WEATHER_SMALL / 4);
+    epd.printf("%.1fkm/h", haData.wind_speed);
+
+    epd.drawBitmap(OFFSET_LEFT + 250, OFFSET_TOP + weatherdetails_offset - GLYPH_SIZE_WEATHER_SMALL / 2, icon_humidity, GLYPH_SIZE_WEATHER_SMALL, GLYPH_SIZE_WEATHER_SMALL, GxEPD_BLACK);
+    epd.setCursor(OFFSET_LEFT + 310, OFFSET_TOP + weatherdetails_offset + GLYPH_SIZE_WEATHER_SMALL / 4);
+    epd.printf("%.1f%%", haData.humidity_outside);
+    
+    // print forecasts
+    size_t forecast_offset_y = weatherdetails_offset + 60;
+    printForecast(20, forecast_offset_y, get_weather_icon(haData.weather_forecast_2h, true), haData.weather_forecast_2h_temp, haData.weather_forecast_2h_time);
+    printForecast(145, forecast_offset_y, get_weather_icon(haData.weather_forecast_4h, true), haData.weather_forecast_4h_temp, haData.weather_forecast_4h_time);
+    printForecast(270, forecast_offset_y, get_weather_icon(haData.weather_forecast_6h, true), haData.weather_forecast_6h_temp, haData.weather_forecast_6h_time);
+    printForecast(395, forecast_offset_y, get_weather_icon(haData.weather_forecast_8h, true), haData.weather_forecast_8h_temp, haData.weather_forecast_8h_time);
+
+    // living room temperature
+    epd.drawBitmap(OFFSET_LEFT + 30, OFFSET_TOP + 275, icon_living_room, 80, 80, GxEPD_BLACK);
+    epd.drawBitmap(OFFSET_LEFT + 120, OFFSET_TOP + 300, icon40_thermometer, 40, 40, GxEPD_BLACK);
+    epd.drawBitmap(OFFSET_LEFT + 280, OFFSET_TOP + 300, icon40_humidity, 40, 40, GxEPD_BLACK);
+
+    epd.setFont(&GothamRounded_Bold14pt8b);
+    epd.setCursor(OFFSET_LEFT + 158, OFFSET_TOP + 330);
+    epd.printf("%.1f°C", haData.temperature_inside);
+
+    epd.setCursor(OFFSET_LEFT + 320, OFFSET_TOP + 330);
+    epd.printf("%.1f%%", haData.humidity_inside);
+
+    //epd.drawFastHLine(0, 190, 512, GxEPD_BLACK);
+    epd.drawFastHLine(0, 280, 512, GxEPD_BLACK);
+    epd.drawFastVLine(133, 180, 100, GxEPD_BLACK);
+    epd.drawFastVLine(258, 180, 100, GxEPD_BLACK);
+    epd.drawFastVLine(383, 180, 100, GxEPD_BLACK);
+    // calibrate borders
+    // epd.drawRect(OFFSET_LEFT, OFFSET_TOP, epd.width() - OFFSET_LEFT - OFFSET_RIGHT, epd.height() - OFFSET_TOP - OFFSET_BOTTOM, GxEPD_BLACK);
+  } while (epd.nextPage());
+}
+
+String httpGETRequest(const char *serverName)
+{
+  WiFiClient client;
+  HTTPClient http;
+
+  // Your IP address with path or Domain name with URL path
+  http.begin(client, serverName);
+  //http.begin(serverName);
+  // Send HTTP POST request
+  http.setAuthorizationType("Bearer");
+  http.setAuthorization(token);  
+  http.addHeader("Content-Type", "application/json");
+  int httpResponseCode = http.GET();
+
+  String payload = "{}";
+
+  if (httpResponseCode > 0)
+  {
+    Serial.print("HTTP Response code: ");
+    Serial.println(httpResponseCode);
+    payload = http.getString();
+  }
+  else
+  {
+    Serial.print("Error code: ");
+    Serial.println(httpResponseCode);
+  }
+  // Free resources
+  http.end();
+
+  return payload;
+}
+
+void getData()
+{
+  StaticJsonDocument<1024> doc; // change size if needed
+  deserializeJson(doc, httpGETRequest(http_endpoint));
+  haData.temperature_inside = doc["attributes"]["temperature_inside"].as<float>();
+  haData.humidity_inside = doc["attributes"]["humidity_inside"].as<float>();
+  haData.temperature_outside = doc["attributes"]["temperature_outside"].as<float>();
+  haData.humidity_outside = doc["attributes"]["humidity_outside"].as<float>();
+  haData.wind_speed = doc["attributes"]["wind_speed"].as<float>();
+  haData.weather_forecast_now = doc["attributes"]["weather_forecast_now"].as<String>();
+  haData.weather_forecast_2h = doc["attributes"]["weather_forecast_2h"].as<String>();
+  haData.weather_forecast_2h_temp = doc["attributes"]["weather_forecast_2h_temp"].as<float>();
+  haData.weather_forecast_2h_time = doc["attributes"]["weather_forecast_2h_time"].as<String>();
+  haData.weather_forecast_4h = doc["attributes"]["weather_forecast_4h"].as<String>();
+  haData.weather_forecast_4h_temp = doc["attributes"]["weather_forecast_4h_temp"].as<float>();
+  haData.weather_forecast_4h_time = doc["attributes"]["weather_forecast_4h_time"].as<String>();
+  haData.weather_forecast_6h = doc["attributes"]["weather_forecast_6h"].as<String>();
+  haData.weather_forecast_6h_temp = doc["attributes"]["weather_forecast_6h_temp"].as<float>();
+  haData.weather_forecast_6h_time = doc["attributes"]["weather_forecast_6h_time"].as<String>();
+  haData.weather_forecast_8h = doc["attributes"]["weather_forecast_8h"].as<String>();
+  haData.weather_forecast_8h_temp = doc["attributes"]["weather_forecast_8h_temp"].as<float>();
+  haData.weather_forecast_8h_time = doc["attributes"]["weather_forecast_8h_time"].as<String>();
+  haData.time = doc["attributes"]["time"].as<String>();
+  haData.timestamp = doc["attributes"]["timestamp"].as<String>();
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
   Serial.println("Weather Display Booting...");
   SPI.begin(CLK, MISO, MOSI, CS);
-  delay(500);
-  epdInit();
-  delay(500);
-  //epd.display();
+  
+  WiFi.begin(ssid, password); // Connect to the network
+  Serial.println("\nConnecting to WiFi Network ..");
 
-  // Draw display
-  // Serial.println("Drawing to e-paper...");
-  epd.fillScreen(GxEPD_WHITE);
-  epd.setCursor(125,20);
-  epd.setTextSize(1);
-  epd.print("HOME DASHBOARD");
-  //epd.drawRect(0, 0, screenW, screenH, GxEPD_BLACK);
-  epd.display();
-  // epd.hibernate();
-  // //epdPower(LOW);
- 
-  // Serial.println("Entering deep sleep...");
-  // esp_sleep_enable_ext0_wakeup(GPIO_NUM_2, 0); // Wake on button press
-  // esp_sleep_enable_timer_wakeup(900LL * 1000000); // 15 min
-  // esp_deep_sleep_start();
+  while(WiFi.status() != WL_CONNECTED){
+    Serial.print(".");
+    delay(100);
+  }
+
+  Serial.println("\nConnected to the WiFi network");
+  Serial.print("Local ESP32 IP: ");
+  Serial.println(WiFi.localIP());
+
+
+  //if (loadRTCData() == false || ctr % 12 == 0) // first load or every 20th time
+  //{
+    // init if first start
+  epdInit();
+  //}
+  //else
+  //{
+    // initial false for re-init after processor deep sleep wake up, if display power supply was kept
+    // this can be used to avoid the repeated initial full refresh on displays with fast partial update
+    //epd.init(115200, false, 50, false); // initial = false
+    //epd.setPartialWindow(0, 0, epd.width(), epd.height());
+  //}
 }
 
-void loop() {
-  // Empty - device will be in deep sleep
-} 
+void loop()
+{
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    Serial.println("getting data");
+    
+    getData();
+    writeDisplay();
+    epd.powerOff();
+//#ifdef PC_DEBUG
+  ESP.deepSleep(10 * 2 * 1000000); // sleep 2 minutes will enter setup() again
+//#else
+//    ESP.deepSleep(10 * 60 * 1000000); // sleep for 10 minutes
+//#endif
+  }
+  else
+  {
+    Serial.println("No wifi");
+  }
+  delay(200);
+}
