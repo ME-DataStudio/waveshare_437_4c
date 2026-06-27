@@ -5,5 +5,6 @@ Driving ePaper display 4.37inch 4 colours with ESP32.
     - ESP32 S3 (UM feathers3
     - waveshare 4.37 inch 4 color epaper with driver board, model G
     Which is in turn is Inspired by Weatherman Dashboard for ESPHome. Implemented Partial display refresh for nicer appearance and Deep Sleep for longer battery life time.
+TODO: add battery with battery indicator
 3. ESPhome -> waveshare 4.37in 4 colour is not supported in spi-epaper or waveshare-epaper. Some result with spectra-e6 model but very shake (when driver board is cold it works when it warms up it does not. I posted the YAML here for others who maybe find a wat
 
