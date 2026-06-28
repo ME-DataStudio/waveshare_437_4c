@@ -1,0 +1,88 @@
+template
+  - trigger:
+      - platform: homeassistant
+        event: start
+      - platform: time_pattern
+        minutes: "/5"
+    action:
+      - service: weather.get_forecasts
+        target:
+          entity_id: weather.forecast_home
+        data:
+          type: hourly
+        response_variable: forecast_hourly
+    sensor:
+      - name: epaper-esp32s3-data
+        unique_id: "weersvoorspelling"
+        state: "OK"  
+        attributes:
+          temperature_inside: "{{ states('sensor.snzb_02d_temperatuur') }}"
+          humidity_inside: "{{ states('sensor.snzb_02d_luchtvochtigheid') }}"
+          temperature_outside: "{{ states('sensor.bresser_7in1_44010_buitentemperatuur') }}"
+          humidity_outside: "{{ states('sensor.bresser_7in1_44010_luchtvochtigheid') }}"
+          wind_speed: "{{ states('sensor.bresser_7in1_44010_wind_average') }}"
+          wind_direction: "{{ states('sensor.wind_richting') }}"
+          time: " {{ '{:02}:{:02}'.format(now().hour, now().minute) }}"
+          weather_forecast_now: >
+            {% set cond_now = states('weather.forecast_home') %}
+            {% if states('sun.sun') == 'below_horizon' %}
+                {% if cond_now == 'sunny' %} clear-night {% elif cond_now == 'partlycloudy' %} night-partly-cloudy {% else %} {{ cond_now }} {% endif %}
+            {% else %}
+                {{ cond_now }}
+            {% endif %}
+          weather_forecast_2h: >
+            {% set cond1 = forecast_hourly['weather.forecast_home'].forecast[1].condition %}
+            {% set next_setting = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
+            {% set next_rising = as_timestamp(state_attr('sun.sun', 'next_rising')) %}
+            {% set cond1_time = as_timestamp(forecast_hourly['weather.forecast_home'].forecast[1].datetime) %}
+            {% if cond1_time < next_rising and next_rising < next_setting %}
+                {% if cond1 == 'sunny' %} clear-night {% elif cond1 == 'partlycloudy' %} night-partly-cloudy {% else %} {{ cond1 }} {% endif %}
+            {% else %}
+                {{ cond1 }}
+            {% endif %}
+          weather_forecast_2h_temp: >
+            {{ forecast_hourly['weather.forecast_home'].forecast[1].temperature | round }}
+          weather_forecast_2h_time: >
+            {{ as_timestamp(forecast_hourly['weather.forecast_home'].forecast[1].datetime) | timestamp_custom('%H:%M')}}
+          weather_forecast_4h: >
+            {% set cond1 = forecast_hourly['weather.forecast_home'].forecast[3].condition %}
+            {% set next_setting = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
+            {% set next_rising = as_timestamp(state_attr('sun.sun', 'next_rising')) %}
+            {% set cond1_time = as_timestamp(forecast_hourly['weather.forecast_home'].forecast[3].datetime) %}
+            {% if cond1_time < next_rising and next_rising < next_setting %}
+                {% if cond1 == 'sunny' %} clear-night {% elif cond1 == 'partlycloudy' %} night-partly-cloudy {% else %} {{ cond1 }} {% endif %}
+            {% else %}
+                {{ cond1 }}
+            {% endif %}
+          weather_forecast_4h_temp: >
+            {{ forecast_hourly['weather.forecast_home'].forecast[3].temperature | round }}
+          weather_forecast_4h_time: >
+            {{ as_timestamp(forecast_hourly['weather.forecast_home'].forecast[3].datetime) | timestamp_custom('%H:%M')}} 
+          weather_forecast_6h: >
+            {% set cond1 = forecast_hourly['weather.forecast_home'].forecast[5].condition %}
+            {% set next_setting = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
+            {% set next_rising = as_timestamp(state_attr('sun.sun', 'next_rising')) %}
+            {% set cond1_time = as_timestamp(forecast_hourly['weather.forecast_home'].forecast[5].datetime) %}
+            {% if cond1_time < next_rising and next_rising < next_setting %}
+                {% if cond1 == 'sunny' %} clear-night {% elif cond1 == 'partlycloudy' %} night-partly-cloudy {% else %} {{ cond1 }} {% endif %}
+            {% else %}
+                {{ cond1 }}
+            {% endif %}
+          weather_forecast_6h_temp: >
+            {{ forecast_hourly['weather.forecast_home'].forecast[5].temperature | round }}
+          weather_forecast_6h_time: >
+            {{ as_timestamp(forecast_hourly['weather.forecast_home'].forecast[5].datetime) | timestamp_custom('%H:%M')}}
+          weather_forecast_8h: >
+            {% set cond1 = forecast_hourly['weather.forecast_home'].forecast[7].condition %}
+            {% set next_setting = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
+            {% set next_rising = as_timestamp(state_attr('sun.sun', 'next_rising')) %}
+            {% set cond1_time = as_timestamp(forecast_hourly['weather.forecast_home'].forecast[7].datetime) %}
+            {% if cond1_time < next_rising and next_rising < next_setting %}
+                {% if cond1 == 'sunny' %} clear-night {% elif cond1 == 'partlycloudy' %} night-partly-cloudy {% else %} {{ cond1 }} {% endif %}
+            {% else %}
+                {{ cond1 }}
+            {% endif %}
+          weather_forecast_8h_temp: >
+            {{ forecast_hourly['weather.forecast_home'].forecast[7].temperature | round }}
+          weather_forecast_8h_time: >
+            {{ as_timestamp(forecast_hourly['weather.forecast_home'].forecast[7].datetime) | timestamp_custom('%H:%M')}}
