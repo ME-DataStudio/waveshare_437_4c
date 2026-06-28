@@ -6,6 +6,6 @@ Driving ePaper display 4.37inch 4 colours with ESP32.
     - waveshare 4.37 inch 4 color epaper with driver board, model G
     Which is in turn is Inspired by Weatherman Dashboard for ESPHome. Implemented Partial display refresh for nicer appearance and Deep Sleep for longer battery life time.
     - read data from Homeassistant via Homeassistant API. Create long-live token in Homeassistant en create a Template with an entity-id and the data i want to show on the epaper.
-    - FeatherS3D has function for battery charge via I2C. 
+    - FeatherS3D has function for requesting battery charge via I2C. 
 3. ESPhome -> waveshare 4.37in 4 colour is not supported in spi-epaper or waveshare-epaper. Some result with spectra-e6 model but very shake (when driver board is cold it works when it warms up it does not. I posted the YAML here for others who maybe find a wat
 
